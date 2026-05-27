@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+  <meta name="apple-mobile-web-app-title" content="Семья"/>
+  <meta name="theme-color" content="#1D9E75"/>
+  <meta name="description" content="Семейный мессенджер"/>
+  <link rel="manifest" href="/manifest.json"/>
+  <link rel="apple-touch-icon" href="/icon-192.png"/>
+  <link rel="stylesheet" href="/style.css"/>
+  <title>Семейный чат</title>
+</head>
+<body>
+<div id="app">
+
+  <!-- INSTALL BANNER -->
+  <div id="install-banner">
+    <span>Установи приложение на экран домой</span>
+    <button onclick="installApp()">Установить</button>
+  </div>
+
+  <!-- ── HOME SCREEN ── -->
+  <div class="screen active" id="screen-home">
+    <div class="topbar">
+      <span class="topbar-title" id="home-title">Семья 👨‍👩‍👧‍👦</span>
+      <button class="back-btn" aria-label="Новое сообщение" style="color:var(--green)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      </button>
+    </div>
+
+    <!-- CHATS TAB -->
+    <div id="home-chats" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+      <div class="chat-scroll" id="chat-list"></div>
+    </div>
+
+    <!-- MEMBERS TAB -->
+    <div id="home-members" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+      <div class="chat-scroll" id="members-list"></div>
+    </div>
+
+    <!-- SETTINGS TAB -->
+    <div id="home-settings" style="flex:1;display:flex;flex-direction:column;overflow-y:auto">
+      <div style="display:flex;align-items:center;gap:14px;padding:20px 16px">
+        <div class="av av-green lg">Я</div>
+        <div>
+          <div style="font-size:18px;font-weight:600;color:var(--text)">Моё имя</div>
+          <div style="font-size:14px;color:var(--text2)">+7 (999) 123-45-67</div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-row">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span>Уведомления</span>
+          <span class="settings-val">Вкл</span>
+        </div>
+        <div class="settings-row">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <span>Шифрование</span>
+          <span class="settings-val" style="color:var(--green)">E2EE ✓</span>
+        </div>
+        <div class="settings-row">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+          <span>Последний визит</span>
+          <span class="settings-val">Все</span>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-row" onclick="installApp()" style="cursor:pointer">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>Установить приложение</span>
+        </div>
+      </div>
+
+      <div style="text-align:center;padding:24px;font-size:13px;color:var(--text3)">
+        Семейный мессенджер · v1.0<br>Сквозное шифрование E2EE
+      </div>
+    </div>
+
+    <!-- TABBAR -->
+    <nav class="tabbar">
+      <button class="tab-btn active" data-tab="chats" onclick="setTab('chats')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Чаты
+      </button>
+      <button class="tab-btn" data-tab="members" onclick="setTab('members')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Семья
+      </button>
+      <button class="tab-btn" data-tab="settings" onclick="setTab('settings')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Настройки
+      </button>
+    </nav>
+  </div>
+
+  <!-- ── CHAT SCREEN ── -->
+  <div class="screen" id="screen-chat">
+    <div class="topbar" id="chat-topbar"></div>
+    <div class="msg-scroll" id="msg-list"></div>
+    <div class="input-bar">
+      <input id="chat-input" type="text" placeholder="Сообщение..." autocomplete="off"/>
+      <button class="send-btn" onclick="sendMessage()" aria-label="Отправить">
+        <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+      </button>
+    </div>
+  </div>
+
+</div>
+<script src="/app.js"></script>
+</body>
+</html>
