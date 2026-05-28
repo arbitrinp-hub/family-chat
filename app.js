@@ -1,263 +1,223 @@
 'use strict';
 
-// ── DATA ────────────────────────────────────────────────────────────────────
+const SUPABASE_URL = 'https://flbixbsdexquntyvznma.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_gPF-HVbUXEM82T-a90hsng_ILvoRRkY';
 
-const ME = { id: 'me', name: 'Я', initials: 'Я', color: 'green' };
+// ── SUPABASE CLIENT ──────────────────────────────────────────────────────────
 
-const MEMBERS = [
-  { id: 'mama',   name: 'Мама',    initials: 'МА', color: 'purple', online: true,  seen: 'онлайн' },
-  { id: 'papa',   name: 'Папа',    initials: 'ПА', color: 'orange', online: false, seen: '30 мин назад' },
-  { id: 'sestra', name: 'Сестра',  initials: 'СЕ', color: 'coral',  online: true,  seen: 'онлайн' },
-  { id: 'brat',   name: 'Брат',    initials: 'БР', color: 'blue',   online: false, seen: 'вчера' },
-  { id: 'babush', name: 'Бабушка', initials: 'Б',  color: 'teal',   online: false, seen: '3 ч назад' },
-];
-
-const CHATS = [
-  {
-    id: 'group', name: 'Общий чат', emoji: '👨‍👩‍👧', isGroup: true,
-    unread: 3, pinned: true,
-    messages: [
-      { id: 1, text: 'Ужин в 19:00, все дома? 🍽️', from: 'mama', time: '19:42' },
-      { id: 2, text: 'Да, уже еду!',                from: 'papa', time: '19:44' },
-      { id: 3, text: 'Задержусь на 10 минут 😅',    from: 'sestra', time: '19:45' },
-      { id: 4, text: 'Я дома, жду всех!',           from: 'me',   time: '19:46' },
-    ]
-  },
-  {
-    id: 'mama', name: 'Мама', memberId: 'mama', isGroup: false,
-    unread: 0, pinned: false,
-    messages: [
-      { id: 1, text: 'Мам, купи торт к ужину?', from: 'me',   time: '18:10' },
-      { id: 2, text: 'Хорошо, привезу 🍰',       from: 'mama', time: '18:15' },
-    ]
-  },
-  {
-    id: 'papa', name: 'Папа', memberId: 'papa', isGroup: false,
-    unread: 0, pinned: false,
-    messages: [
-      { id: 1, text: 'Выезжаю, буду через 30 мин', from: 'papa', time: '17:50' },
-      { id: 2, text: 'Хорошо, ждём! 👍',           from: 'me',   time: '17:51' },
-    ]
-  },
-  {
-    id: 'sestra', name: 'Сестра', memberId: 'sestra', isGroup: false,
-    unread: 1, pinned: false,
-    messages: [
-      { id: 1, text: 'Посмотри какое видео 😂', from: 'sestra', time: 'Вчера' },
-    ]
-  },
-];
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ── STATE ────────────────────────────────────────────────────────────────────
 
-let activeScreen = 'home';
-let activeChatId = null;
-let activeTab = 'chats';
+let ME = null;
+let MEMBERS = [];
+let activeChatId = 'group';
+let msgSubscription = null;
 let deferredInstall = null;
 
-// ── HELPERS ──────────────────────────────────────────────────────────────────
+// ── COLORS ───────────────────────────────────────────────────────────────────
 
-function member(id) { return MEMBERS.find(m => m.id === id); }
-function chat(id)   { return CHATS.find(c => c.id === id); }
-
-function now() {
-  const d = new Date();
-  return d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0');
+const COLORS = ['purple','orange','coral','teal','blue','green'];
+function randomColor() { return COLORS[Math.floor(Math.random() * COLORS.length)]; }
+function initials(name) {
+  return name.trim().split(/\s+/).map(w => w[0].toUpperCase()).slice(0,2).join('');
 }
 
-function avatarEl(m, size = '') {
-  const div = document.createElement('div');
-  div.className = `av av-${m.color}${size ? ' ' + size : ''}`;
-  div.textContent = m.emoji || m.initials;
-  return div;
+// ── TIME ─────────────────────────────────────────────────────────────────────
+
+function formatTime(ts) {
+  const d = new Date(ts);
+  const now = new Date();
+  const diff = now - d;
+  if (diff < 60000) return 'только что';
+  if (diff < 3600000) return Math.floor(diff/60000) + ' мин';
+  if (d.toDateString() === now.toDateString()) {
+    return d.getHours() + ':' + String(d.getMinutes()).padStart(2,'0');
+  }
+  return d.getDate() + '.' + String(d.getMonth()+1).padStart(2,'0');
 }
 
-function el(tag, cls, html = '') {
+// ── DOM HELPERS ──────────────────────────────────────────────────────────────
+
+function el(tag, cls, html='') {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
   if (html) e.innerHTML = html;
   return e;
 }
 
-// ── SCREENS ──────────────────────────────────────────────────────────────────
-
-function go(screen, opts = {}) {
+function go(screen) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   const s = document.getElementById('screen-' + screen);
-  if (!s) return;
-  s.classList.add('active');
-  if (screen === 'chat' || screen === 'members') s.classList.add('slide-in');
-  activeScreen = screen;
-  if (opts.chatId) {
-    activeChatId = opts.chatId;
-    renderChat(opts.chatId);
-  }
+  if (s) { s.classList.add('active'); }
 }
 
-// ── CHAT LIST ─────────────────────────────────────────────────────────────────
-
-function renderChatList() {
-  const pinned = CHATS.filter(c => c.pinned);
-  const rest   = CHATS.filter(c => !c.pinned);
-  const wrap = document.getElementById('chat-list');
-  wrap.innerHTML = '';
-
-  function addRow(c) {
-    const last = c.messages[c.messages.length - 1];
-    const fromMember = last.from !== 'me' ? member(last.from) : null;
-    const preview = fromMember ? `${fromMember.name}: ${last.text}` : last.text;
-
-    const row = el('div', 'chat-row');
-    row.onclick = () => go('chat', { chatId: c.id });
-
-    const avContainer = document.createElement('div');
-    if (c.isGroup) {
-      const av = el('div', 'av av-teal');
-      av.textContent = c.emoji;
-      avContainer.appendChild(av);
-    } else {
-      const m = member(c.memberId);
-      avContainer.appendChild(avatarEl(m));
-    }
-
-    const info = el('div', 'chat-info');
-    info.innerHTML = `<div class="chat-name">${c.name}</div>
-      <div class="chat-preview">${preview}</div>`;
-
-    const meta = el('div', 'chat-meta');
-    meta.innerHTML = `<span class="chat-time">${last.time}</span>`;
-    if (c.unread > 0) {
-      const b = el('span', 'badge', String(c.unread));
-      meta.appendChild(b);
-    }
-
-    row.appendChild(avContainer);
-    row.appendChild(info);
-    row.appendChild(meta);
-    wrap.appendChild(row);
-  }
-
-  if (pinned.length) {
-    wrap.appendChild(el('div', 'section-hdr', 'Закреплённые'));
-    pinned.forEach(addRow);
-  }
-  wrap.appendChild(el('div', 'section-hdr', 'Личные'));
-  rest.forEach(addRow);
+function setTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.tab === tab)
+  );
+  document.getElementById('home-chats').style.display    = tab === 'chats'    ? 'flex' : 'none';
+  document.getElementById('home-members').style.display  = tab === 'members'  ? 'flex' : 'none';
+  document.getElementById('home-settings').style.display = tab === 'settings' ? 'flex' : 'none';
+  if (tab === 'members') renderMembers();
 }
 
-// ── CHAT VIEW ─────────────────────────────────────────────────────────────────
+// ── AUTH / LOGIN ─────────────────────────────────────────────────────────────
 
-function renderChat(chatId) {
-  const c = chat(chatId);
-  if (!c) return;
+async function checkInvite() {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('invite');
+  if (!code) return null;
 
-  c.unread = 0;
-  renderChatList();
-
-  // topbar
-  const tb = document.getElementById('chat-topbar');
-  const avDiv = document.createElement('div');
-  if (c.isGroup) {
-    const av = el('div', 'av av-teal');
-    av.textContent = c.emoji;
-    avDiv.appendChild(av);
-  } else {
-    avDiv.appendChild(avatarEl(member(c.memberId)));
-  }
-
-  const sub = c.isGroup
-    ? `${MEMBERS.length} участников`
-    : (member(c.memberId).online ? '<span style="color:var(--green)">онлайн</span>' : member(c.memberId).seen);
-
-  tb.innerHTML = `
-    <button class="back-btn" onclick="go('home')" aria-label="Назад">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px"><polyline points="15 18 9 12 15 6"/></svg>
-    </button>`;
-  tb.appendChild(avDiv);
-  tb.innerHTML += `<div style="flex:1"><div class="topbar-title">${c.name}</div><div class="topbar-sub">${sub}</div></div>`;
-
-  // messages
-  renderMessages(chatId);
-
-  // focus input
-  setTimeout(() => {
-    const inp = document.getElementById('chat-input');
-    if (inp) inp.focus();
-  }, 300);
+  const { data } = await sb.from('users').select('*').eq('invite_code', code).single();
+  return data;
 }
 
-function renderMessages(chatId) {
-  const c = chat(chatId);
-  const wrap = document.getElementById('msg-list');
-  wrap.innerHTML = '';
+async function login() {
+  const name = document.getElementById('login-name').value.trim();
+  if (!name) return;
 
-  c.messages.forEach(msg => {
-    const isOut = msg.from === 'me';
-    const row = el('div', `msg ${isOut ? 'out' : 'in'}`);
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('invite');
 
-    if (!isOut && c.isGroup) {
-      const m = member(msg.from);
-      if (m) row.appendChild(avatarEl(m, 'sm'));
+  const color = randomColor();
+  const id = 'user_' + Date.now();
+  const ini = initials(name);
+
+  let approved = false;
+
+  // Проверяем — есть ли уже пользователи (первый = админ, сразу approved)
+  const { data: existing } = await sb.from('users').select('id').limit(1);
+  if (!existing || existing.length === 0) {
+    approved = true; // первый пользователь — администратор
+  } else if (code) {
+    // проверяем инвайт
+    const { data: inv } = await sb.from('users').select('*').eq('invite_code', code).single();
+    if (inv && !inv.approved) {
+      // это зарезервированный слот — обновляем
+      await sb.from('users').update({ name, initials: ini, color, approved: true, invite_code: null })
+        .eq('invite_code', code);
+      ME = { id: inv.id, name, initials: ini, color, approved: true };
+      localStorage.setItem('me', JSON.stringify(ME));
+      startApp();
+      return;
     }
+  }
 
-    const bwrap = el('div');
-    if (!isOut && c.isGroup && member(msg.from)) {
-      bwrap.innerHTML = `<div class="msg-sender">${member(msg.from).name}</div>`;
-    }
-    const bubble = el('div', 'bubble', msg.text);
-    bwrap.appendChild(bubble);
-    row.appendChild(bwrap);
+  const { data: user, error } = await sb.from('users').insert({
+    id, name, initials: ini, color, approved, online: true
+  }).select().single();
 
-    const t = el('span', 'msg-time', msg.time);
-    row.appendChild(t);
+  if (error) { alert('Ошибка: ' + error.message); return; }
 
-    wrap.appendChild(row);
+  ME = user;
+  localStorage.setItem('me', JSON.stringify(ME));
+
+  if (!approved) {
+    go('pending');
+    // Подписываемся на одобрение
+    sb.channel('approval').on('postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'users', filter: `id=eq.${ME.id}` },
+      payload => {
+        if (payload.new.approved) {
+          ME.approved = true;
+          localStorage.setItem('me', JSON.stringify(ME));
+          startApp();
+        }
+      }
+    ).subscribe();
+    return;
+  }
+
+  startApp();
+}
+
+// ── INVITE ───────────────────────────────────────────────────────────────────
+
+async function createInvite() {
+  const code = Math.random().toString(36).slice(2, 10);
+  const id = 'invite_' + Date.now();
+  await sb.from('users').insert({
+    id, name: 'Ожидает...', initials: '?', color: 'gray',
+    approved: false, invite_code: code, online: false
   });
-
-  wrap.scrollTop = wrap.scrollHeight;
+  const link = window.location.origin + window.location.pathname + '?invite=' + code;
+  document.getElementById('invite-link').value = link;
+  document.getElementById('invite-box').style.display = 'block';
 }
 
-function sendMessage() {
-  const inp = document.getElementById('chat-input');
-  const text = inp.value.trim();
-  if (!text || !activeChatId) return;
+function copyInvite() {
+  const inp = document.getElementById('invite-link');
+  inp.select();
+  navigator.clipboard.writeText(inp.value).then(() => {
+    document.getElementById('copy-btn').textContent = '✓ Скопировано';
+    setTimeout(() => document.getElementById('copy-btn').textContent = 'Копировать', 2000);
+  });
+}
 
-  const c = chat(activeChatId);
-  c.messages.push({ id: Date.now(), text, from: 'me', time: now() });
-  inp.value = '';
+// ── APP START ─────────────────────────────────────────────────────────────────
 
-  renderMessages(activeChatId);
-  renderChatList();
+async function startApp() {
+  go('home');
+  setTab('chats');
+  await loadMembers();
+  await loadMessages(activeChatId);
+  subscribeMessages();
+  subscribeMembers();
+  updateOnline(true);
+
+  // Показать имя в настройках
+  document.getElementById('my-name').textContent = ME.name;
+  document.getElementById('my-av').textContent = ME.initials;
+  document.getElementById('my-av').className = `av av-${ME.color} lg`;
+
+  // Показать кнопку приглашения только админу (первому пользователю)
+  const { data } = await sb.from('users').select('id').order('created_at').limit(1).single();
+  if (data && data.id === ME.id) {
+    document.getElementById('invite-section').style.display = 'block';
+  }
 }
 
 // ── MEMBERS ───────────────────────────────────────────────────────────────────
 
+async function loadMembers() {
+  const { data } = await sb.from('users').select('*').eq('approved', true);
+  MEMBERS = data || [];
+  renderChatList();
+}
+
+function subscribeMembers() {
+  sb.channel('members').on('postgres_changes',
+    { event: '*', schema: 'public', table: 'users' },
+    () => loadMembers()
+  ).subscribe();
+}
+
+function updateOnline(online) {
+  if (!ME) return;
+  sb.from('users').update({ online, last_seen: new Date().toISOString() })
+    .eq('id', ME.id).then(() => {});
+}
+
 function renderMembers() {
   const wrap = document.getElementById('members-list');
   wrap.innerHTML = '';
-
-  MEMBERS.forEach(m => {
+  MEMBERS.filter(m => m.id !== ME?.id).forEach(m => {
     const row = el('div', 'member-row');
-
     const avWrap = el('div', 'av-wrap');
-    avWrap.appendChild(avatarEl(m, 'lg'));
-    if (m.online) {
-      avWrap.appendChild(el('div', 'online-dot'));
-    }
-
+    const av = el('div', `av av-${m.color} lg`, m.initials);
+    avWrap.appendChild(av);
+    if (m.online) avWrap.appendChild(el('div', 'online-dot'));
     const info = el('div', 'chat-info');
+    const seen = m.online ? '<span style="color:var(--green)">онлайн</span>'
+      : formatTime(m.last_seen);
     info.innerHTML = `<div class="chat-name">${m.name}</div>
-      <div class="chat-preview" style="color:${m.online ? 'var(--green)' : 'var(--text3)'}">${m.seen}</div>`;
-
+      <div class="chat-preview">${seen}</div>`;
     const btn = el('button', 'back-btn');
     btn.setAttribute('aria-label', 'Написать');
     btn.style.color = 'var(--green)';
     btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`;
-    btn.onclick = () => {
-      const c = CHATS.find(ch => ch.memberId === m.id);
-      if (c) go('chat', { chatId: c.id });
-    };
-
+    btn.onclick = () => openChat(m.id);
     row.appendChild(avWrap);
     row.appendChild(info);
     row.appendChild(btn);
@@ -265,33 +225,171 @@ function renderMembers() {
   });
 }
 
-// ── TABS ──────────────────────────────────────────────────────────────────────
+// ── CHAT LIST ─────────────────────────────────────────────────────────────────
 
-function setTab(tab) {
-  activeTab = tab;
-  document.querySelectorAll('.tab-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.tab === tab);
+function renderChatList() {
+  const wrap = document.getElementById('chat-list');
+  wrap.innerHTML = '';
+
+  // Общий чат
+  const groupRow = el('div', 'chat-row');
+  groupRow.onclick = () => openChat('group');
+  groupRow.innerHTML = `
+    <div class="av av-teal">👨‍👩‍👧</div>
+    <div class="chat-info">
+      <div class="chat-name">Общий чат</div>
+      <div class="chat-preview">${MEMBERS.length} участников</div>
+    </div>`;
+  wrap.appendChild(groupRow);
+
+  // Личные чаты
+  MEMBERS.filter(m => m.id !== ME?.id).forEach(m => {
+    const row = el('div', 'chat-row');
+    row.onclick = () => openChat(m.id);
+    row.innerHTML = `
+      <div class="av av-${m.color}">${m.initials}</div>
+      <div class="chat-info">
+        <div class="chat-name">${m.name}</div>
+        <div class="chat-preview" style="color:${m.online ? 'var(--green)' : 'var(--text2)'}">
+          ${m.online ? 'онлайн' : formatTime(m.last_seen)}
+        </div>
+      </div>`;
+    wrap.appendChild(row);
   });
-
-  const home = document.getElementById('screen-home');
-  const membersSection = document.getElementById('home-members');
-  const chatsSection   = document.getElementById('home-chats');
-  const settingsSection = document.getElementById('home-settings');
-
-  [membersSection, chatsSection, settingsSection].forEach(s => s.style.display = 'none');
-
-  if (tab === 'chats')    { chatsSection.style.display = 'flex'; }
-  if (tab === 'members')  { membersSection.style.display = 'flex'; renderMembers(); }
-  if (tab === 'settings') { settingsSection.style.display = 'flex'; }
 }
 
-// ── INSTALL BANNER ────────────────────────────────────────────────────────────
+// ── MESSAGES ──────────────────────────────────────────────────────────────────
+
+function chatId(userId) {
+  if (userId === 'group') return 'group';
+  return [ME.id, userId].sort().join('_');
+}
+
+async function openChat(userId) {
+  activeChatId = userId;
+  const isGroup = userId === 'group';
+  const member = MEMBERS.find(m => m.id === userId);
+
+  // Topbar
+  const tb = document.getElementById('chat-topbar');
+  const name = isGroup ? 'Общий чат' : (member?.name || '');
+  const sub = isGroup ? `${MEMBERS.length} участников`
+    : (member?.online ? '<span style="color:var(--green)">онлайн</span>' : formatTime(member?.last_seen));
+  const avHtml = isGroup
+    ? `<div class="av av-teal">👨‍👩‍👧</div>`
+    : `<div class="av av-${member?.color}">${member?.initials}</div>`;
+
+  tb.innerHTML = `
+    <button class="back-btn" onclick="go('home')" aria-label="Назад">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    ${avHtml}
+    <div style="flex:1"><div class="topbar-title">${name}</div><div class="topbar-sub">${sub}</div></div>`;
+
+  go('chat');
+  await loadMessages(userId);
+
+  if (msgSubscription) { sb.removeChannel(msgSubscription); }
+  subscribeMessages();
+}
+
+async function loadMessages(userId) {
+  const cid = chatId(userId);
+  const { data } = await sb.from('messages').select('*')
+    .eq('chat_id', cid).order('created_at');
+  renderMessages(data || []);
+}
+
+function subscribeMessages() {
+  const cid = chatId(activeChatId);
+  msgSubscription = sb.channel('msgs_' + cid).on('postgres_changes',
+    { event: 'INSERT', schema: 'public', table: 'messages', filter: `chat_id=eq.${cid}` },
+    payload => appendMessage(payload.new)
+  ).subscribe();
+}
+
+function renderMessages(msgs) {
+  const wrap = document.getElementById('msg-list');
+  wrap.innerHTML = '';
+  msgs.forEach(m => appendMessage(m, false));
+  wrap.scrollTop = wrap.scrollHeight;
+}
+
+function appendMessage(msg, scroll = true) {
+  const wrap = document.getElementById('msg-list');
+  const isOut = msg.from_id === ME?.id;
+  const sender = MEMBERS.find(m => m.id === msg.from_id);
+  const isGroup = activeChatId === 'group';
+
+  const row = el('div', `msg ${isOut ? 'out' : 'in'}`);
+
+  if (!isOut && isGroup && sender) {
+    row.appendChild(el('div', `av av-${sender.color} sm`, sender.initials));
+  }
+
+  const bwrap = el('div');
+  if (!isOut && isGroup && sender) {
+    bwrap.innerHTML = `<div class="msg-sender">${sender.name}</div>`;
+  }
+
+  if (msg.file_url) {
+    const bubble = el('div', 'bubble');
+    if (msg.file_type?.startsWith('image/')) {
+      bubble.innerHTML = `<img src="${msg.file_url}" style="max-width:200px;max-height:200px;border-radius:8px;display:block" onclick="window.open('${msg.file_url}')"/>`;
+    } else if (msg.file_type?.startsWith('video/')) {
+      bubble.innerHTML = `<video src="${msg.file_url}" controls style="max-width:200px;border-radius:8px;display:block"></video>`;
+    } else {
+      bubble.innerHTML = `<a href="${msg.file_url}" target="_blank" style="color:inherit">📎 ${msg.file_name}</a>`;
+    }
+    bwrap.appendChild(bubble);
+  } else {
+    bwrap.appendChild(el('div', 'bubble', msg.text));
+  }
+
+  row.appendChild(bwrap);
+  row.appendChild(el('span', 'msg-time', formatTime(msg.created_at)));
+  wrap.appendChild(row);
+  if (scroll) wrap.scrollTop = wrap.scrollHeight;
+}
+
+async function sendMessage() {
+  const inp = document.getElementById('chat-input');
+  const text = inp.value.trim();
+  if (!text || !ME) return;
+  inp.value = '';
+  const cid = chatId(activeChatId);
+  await sb.from('messages').insert({ chat_id: cid, from_id: ME.id, text });
+}
+
+// ── FILE UPLOAD ───────────────────────────────────────────────────────────────
+
+async function uploadFile(file) {
+  const ext = file.name.split('.').pop();
+  const path = `${ME.id}/${Date.now()}.${ext}`;
+  const { data, error } = await sb.storage.from('media').upload(path, file);
+  if (error) { alert('Ошибка загрузки: ' + error.message); return; }
+  const { data: urlData } = sb.storage.from('media').getPublicUrl(path);
+  const cid = chatId(activeChatId);
+  await sb.from('messages').insert({
+    chat_id: cid, from_id: ME.id,
+    file_url: urlData.publicUrl,
+    file_type: file.type,
+    file_name: file.name
+  });
+}
+
+function onFileSelect(e) {
+  const file = e.target.files[0];
+  if (file) uploadFile(file);
+  e.target.value = '';
+}
+
+// ── INSTALL ───────────────────────────────────────────────────────────────────
 
 window.addEventListener('beforeinstallprompt', e => {
   e.preventDefault();
   deferredInstall = e;
-  const banner = document.getElementById('install-banner');
-  banner.style.display = 'flex';
+  document.getElementById('install-banner').style.display = 'flex';
 });
 
 function installApp() {
@@ -303,13 +401,11 @@ function installApp() {
   }
 }
 
-// iOS install hint
 function checkIOSInstall() {
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-  const isStandalone = window.navigator.standalone;
-  if (isIOS && !isStandalone) {
+  if (isIOS && !window.navigator.standalone) {
     const banner = document.getElementById('install-banner');
-    banner.querySelector('span').textContent = 'Нажми «Поделиться» → «На экран Домой» для установки';
+    banner.querySelector('span').textContent = 'Safari → Поделиться → На экран "Домой"';
     banner.style.display = 'flex';
     banner.querySelector('button').textContent = '✕';
     banner.querySelector('button').onclick = () => banner.style.display = 'none';
@@ -318,19 +414,36 @@ function checkIOSInstall() {
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
 
-document.addEventListener('DOMContentLoaded', () => {
-  // service worker
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js');
-  }
+document.addEventListener('DOMContentLoaded', async () => {
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
 
-  // enter key to send
   document.getElementById('chat-input').addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   });
 
-  renderChatList();
-  go('home');
-  setTab('chats');
+  // Проверяем инвайт в URL
+  const inviteUser = await checkInvite();
+  if (inviteUser && !inviteUser.approved) {
+    document.getElementById('login-title').textContent = 'Вас пригласили в семейный чат!';
+  }
+
+  // Проверяем сохранённую сессию
+  const saved = localStorage.getItem('me');
+  if (saved) {
+    ME = JSON.parse(saved);
+    const { data } = await sb.from('users').select('*').eq('id', ME.id).single();
+    if (data?.approved) {
+      ME = data;
+      startApp();
+      return;
+    } else if (data && !data.approved) {
+      go('pending');
+      return;
+    }
+  }
+
+  go('login');
   checkIOSInstall();
+
+  window.addEventListener('beforeunload', () => updateOnline(false));
 });
