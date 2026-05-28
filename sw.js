@@ -1,4 +1,4 @@
-const CACHE = 'family-messenger-v1';
+const CACHE = 'family-messenger-v3';
 const ASSETS = ['/', '/index.html', '/app.js', '/style.css'];
 
 self.addEventListener('install', e => {
